@@ -47,7 +47,12 @@
         <span>💳 Finance Tracker</span>
         <span class="tab-badge">Active</span>
       </button>
+      <button class="nav-tab" id="tabBtnHealth" type="button">
+        <span>🥗 Health Tracker</span>
+        <span class="tab-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">Active</span>
+      </button>
     </nav>
+
 
     <!-- Install App Banner (Appears on Supported Browsers) -->
     <aside class="install-banner" id="installBanner" aria-label="Installation prompt">
@@ -138,7 +143,25 @@
             </div>
           </article>
 
-          <!-- 2. Jobs -->
+          <!-- 2. Health Tracker (ACTIVE) -->
+          <article class="capability-card" id="card-health" style="border-color: #10b981; background: linear-gradient(180deg, var(--bg-secondary) 0%, rgba(16, 185, 129, 0.08) 100%);">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="card-icon" aria-hidden="true">🥗</span>
+                <h3 class="card-title">Health Tracker</h3>
+              </div>
+              <span class="tab-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">Active</span>
+            </div>
+            <p class="card-desc">
+              Track daily calorie intake against configurable targets, view macro distributions, and estimate meal calories using verified portion baselines.
+            </p>
+            <div class="card-footer">
+              <span class="card-status-text">Module: <code>/api/health-tracker</code></span>
+              <button class="btn-primary" id="btnOpenHealthFromCard" type="button" style="padding: 0.3rem 0.75rem; font-size: 0.8rem; background: linear-gradient(135deg, #059669 0%, #10b981 100%);">Open Tracker &rarr;</button>
+            </div>
+          </article>
+
+          <!-- 3. Jobs -->
           <article class="capability-card" id="card-jobs">
             <div class="card-header">
               <div class="card-title-group">
@@ -428,6 +451,252 @@
       </section>
     </div>
 
+    <!-- TAB 3: HEALTH TRACKER -->
+    <div class="tab-content" id="viewHealth">
+      <!-- Health Header & Quick Actions -->
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+          <h2 style="font-size: 1.4rem; font-weight: 800;">Personal Health &amp; Nutrition Tracker</h2>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">Configurable targets, verified reference estimates, and 100% backend data privacy</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <button class="btn-secondary" id="btnOpenHealthProfileModal" type="button">
+            <span>⚙️ Target &amp; Profile</span>
+          </button>
+          <button class="btn-primary" id="btnOpenNewMealModal" type="button" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">
+            <span>+ Log Meal</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Provisional Target Alert (Shown when target is provisional default) -->
+      <div class="status-banner" id="healthProvisionalBanner" style="border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); display: none;">
+        <span class="status-banner-icon" aria-hidden="true">ℹ️</span>
+        <div style="flex: 1;">
+          <strong style="color: #fbbf24;">Provisional Target Notice:</strong>
+          <span>The current 2,000 kcal target is a provisional default, not a medical or dietary prescription. Configure your profile (height, weight, age, activity level) or manually set your target to personalize.</span>
+        </div>
+        <button type="button" class="btn-secondary" id="btnConfigureProvisionalTarget" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">Configure Target</button>
+      </div>
+
+      <!-- Today's Caloric & Macronutrient Overview Grid -->
+      <section class="health-stats-grid" aria-label="Today's Nutrition Summary">
+        <!-- Calorie Gauge Card -->
+        <div class="stat-card" style="border-top: 3px solid #10b981;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="stat-label">Daily Calories (<span id="healthSummaryDateLabel">Today</span>)</span>
+            <span class="pill-badge" id="healthProvisionalBadge">Provisional</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.25rem;">
+            <span class="stat-value" id="healthStatConsumed" style="color: #34d399;">0</span>
+            <span style="font-size: 1rem; color: var(--text-muted);">/ <span id="healthStatTarget">2000</span> kcal</span>
+          </div>
+          <!-- Calorie Progress Meter -->
+          <div class="meter-bar" style="background: var(--bg-primary); border-radius: 9999px; height: 8px; overflow: hidden; margin-top: 0.5rem; border: 1px solid var(--border-subtle);">
+            <div id="healthCalorieProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); transition: width 0.3s ease;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+            <span><span id="healthStatRemaining">2000</span> kcal remaining</span>
+            <span><span id="healthStatPercent">0%</span> of target</span>
+          </div>
+        </div>
+
+        <!-- Macronutrient Distribution Card -->
+        <div class="stat-card" style="border-top: 3px solid #06b6d4;">
+          <span class="stat-label">Macronutrients Today</span>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem;">
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                <span style="color: #67e8f9;">Protein</span>
+                <strong><span id="healthStatProtein">0</span>g</strong>
+              </div>
+              <div class="meter-bar" style="background: var(--bg-primary); height: 4px; border-radius: 2px; overflow: hidden; margin-top: 0.2rem;">
+                <div id="healthProteinBar" style="width: 0%; height: 100%; background: #06b6d4;"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                <span style="color: #fde047;">Carbs</span>
+                <strong><span id="healthStatCarbs">0</span>g</strong>
+              </div>
+              <div class="meter-bar" style="background: var(--bg-primary); height: 4px; border-radius: 2px; overflow: hidden; margin-top: 0.2rem;">
+                <div id="healthCarbsBar" style="width: 0%; height: 100%; background: #eab308;"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                <span style="color: #f472b6;">Fat</span>
+                <strong><span id="healthStatFat">0</span>g</strong>
+              </div>
+              <div class="meter-bar" style="background: var(--bg-primary); height: 4px; border-radius: 2px; overflow: hidden; margin-top: 0.2rem;">
+                <div id="healthFatBar" style="width: 0%; height: 100%; background: #ec4899;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Meal Category Distribution Card -->
+        <div class="stat-card" style="border-top: 3px solid #8b5cf6;">
+          <span class="stat-label">Meal Type Breakdown</span>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.35rem;">
+            <div style="background: var(--bg-primary); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">🍳 Breakfast</span>
+              <strong style="font-size: 0.95rem; color: #a78bfa;" id="healthBreakfastCal">0 kcal</strong>
+            </div>
+            <div style="background: var(--bg-primary); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">🍛 Lunch</span>
+              <strong style="font-size: 0.95rem; color: #a78bfa;" id="healthLunchCal">0 kcal</strong>
+            </div>
+            <div style="background: var(--bg-primary); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">🍲 Dinner</span>
+              <strong style="font-size: 0.95rem; color: #a78bfa;" id="healthDinnerCal">0 kcal</strong>
+            </div>
+            <div style="background: var(--bg-primary); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">🍎 Snacks</span>
+              <strong style="font-size: 0.95rem; color: #a78bfa;" id="healthSnackCal">0 kcal</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Natural-Language Meal Estimator -->
+      <section class="nlp-box" aria-labelledby="health-nlp-heading" style="border-color: rgba(16, 185, 129, 0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <h3 id="health-nlp-heading" style="font-size: 0.95rem; font-weight: 700; color: #34d399; display: flex; align-items: center; gap: 0.4rem;">
+            <span>⚡ Natural-Language Meal Estimator</span>
+          </h3>
+          <span class="pill-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">Verified Reference Data</span>
+        </div>
+        <p style="font-size: 0.8rem; color: var(--text-secondary);">
+          Describe what you ate. Standard portion baselines are referenced, unsupported foods are flagged, and your explicit confirmation is strictly required before saving:
+        </p>
+
+        <form id="healthNlpForm" class="input-group">
+          <input
+            type="text"
+            id="healthNlpInput"
+            class="input-box"
+            placeholder="e.g., '2 rotis and 1 bowl dal with salad' or '1 apple and 10 almonds'..."
+            required
+          >
+          <button type="submit" id="btnHealthNlpEstimate" class="btn-primary" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">
+            Estimate &amp; Review
+          </button>
+        </form>
+
+        <!-- Quick Sample Chips -->
+        <div class="quick-chips">
+          <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">Try sample:</span>
+          <button type="button" class="quick-chip" data-phrase="2 rotis and 1 bowl dal">"2 rotis and 1 bowl dal"</button>
+          <button type="button" class="quick-chip" data-phrase="1 cup cooked rice, chicken curry, and salad">"1 cup rice, chicken curry, salad"</button>
+          <button type="button" class="quick-chip" data-phrase="1 masala dosa with sambar">"1 masala dosa with sambar"</button>
+          <button type="button" class="quick-chip" data-phrase="1 apple and 10 almonds">"1 apple and 10 almonds"</button>
+          <button type="button" class="quick-chip" data-phrase="2 boiled eggs and 2 slices bread">"2 boiled eggs and 2 slices bread"</button>
+        </div>
+
+        <!-- Meal Estimation Confirmation Card -->
+        <div class="review-card" id="healthMealReviewCard" aria-live="polite">
+          <div class="review-header">
+            <span class="review-title">Review &amp; Confirm Meal Estimate</span>
+            <span class="pill-badge" id="healthEstimateStatusBadge">Draft &bull; Confirmation Required</span>
+          </div>
+          
+          <div id="healthEstimateAlertBanner" style="display: none; padding: 0.6rem 0.85rem; border-radius: var(--radius-sm); font-size: 0.8rem; margin: 0.5rem 0;"></div>
+
+          <!-- Assumed Portions Breakdown Table -->
+          <div style="background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.75rem; margin: 0.5rem 0;">
+            <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 0.4rem;">
+              Assumed Portions &amp; Reference Nutritional Breakdown
+            </span>
+            <div id="healthAssumedPortionsList" style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.82rem;">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <form id="healthMealReviewForm" class="review-grid">
+            <div class="form-group">
+              <label class="filter-label" for="reviewMealType">Meal Type</label>
+              <select id="reviewMealType" class="filter-select" required>
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="snack">Snack</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewMealCalories">Calories (kcal) *</label>
+              <input type="number" id="reviewMealCalories" class="filter-input" min="0" max="10000" required>
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewMealDate">Date</label>
+              <input type="date" id="reviewMealDate" class="filter-input" required>
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewMealTime">Time</label>
+              <input type="text" id="reviewMealTime" class="filter-input" placeholder="HH:MM" maxlength="8">
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label class="filter-label" for="reviewMealFoodItems">Food Items Description *</label>
+              <input type="text" id="reviewMealFoodItems" class="filter-input" maxlength="500" required>
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label class="filter-label" for="reviewMealPortionNotes">Portion Assumptions &amp; Notes</label>
+              <input type="text" id="reviewMealPortionNotes" class="filter-input" maxlength="500">
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewMealProtein">Protein (g)</label>
+              <input type="number" id="reviewMealProtein" class="filter-input" step="0.1" min="0">
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewMealCarbs">Carbs (g)</label>
+              <input type="number" id="reviewMealCarbs" class="filter-input" step="0.1" min="0">
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewMealFat">Fat (g)</label>
+              <input type="number" id="reviewMealFat" class="filter-input" step="0.1" min="0">
+            </div>
+
+            <div class="review-actions" style="grid-column: 1 / -1;">
+              <button type="button" class="btn-secondary" id="btnDiscardHealthReview">Discard</button>
+              <button type="submit" class="btn-primary" id="btnConfirmHealthReview" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">
+                Confirm &amp; Save Meal
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Meal History & Daily Log -->
+      <section aria-labelledby="meals-heading">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <h3 id="meals-heading" class="section-label">Logged Meals</h3>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="date" id="healthFilterDate" class="filter-input" style="padding: 0.3rem 0.5rem; font-size: 0.8rem;">
+            <select id="healthFilterType" class="filter-select" style="padding: 0.3rem 0.5rem; font-size: 0.8rem;">
+              <option value="">All Meals</option>
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snack">Snack</option>
+            </select>
+            <button type="button" class="btn-secondary" id="btnResetHealthFilters" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Reset</button>
+          </div>
+        </div>
+
+        <div id="mealsContainer" class="transactions-container" aria-live="polite">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Meals Pagination Controls -->
+        <div id="mealsPaginationControls" style="display: none; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-subtle);">
+          <button type="button" class="btn-secondary" id="btnPrevMealsPage">Previous</button>
+          <span style="font-size: 0.8rem; color: var(--text-muted);" id="mealsPageIndicator">Page 1 of 1</span>
+          <button type="button" class="btn-secondary" id="btnNextMealsPage">Next</button>
+        </div>
+      </section>
+    </div>
+
+
     <!-- Manual Entry / Edit Transaction Modal -->
     <div class="modal-overlay" id="txModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <div class="modal-content">
@@ -496,6 +765,159 @@
         </form>
       </div>
     </div>
+
+    <!-- Manual Entry / Edit Meal Modal -->
+    <div class="modal-overlay" id="mealModal" role="dialog" aria-modal="true" aria-labelledby="mealModalTitle">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title" id="mealModalTitle">Log Meal</h3>
+          <button type="button" class="modal-close" id="btnCloseMealModal" aria-label="Close modal">&times;</button>
+        </div>
+
+        <form id="modalMealForm" style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <input type="hidden" id="modalMealId">
+
+          <div class="form-group">
+            <label class="filter-label" for="modalMealType">Meal Type *</label>
+            <select id="modalMealType" class="filter-select" required>
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snack">Snack</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalMealFoodItems">Food Items *</label>
+            <input type="text" id="modalMealFoodItems" class="filter-input" placeholder="e.g. 2 rotis, dal tadka, salad" required maxlength="500">
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalMealCalories">Calories (kcal) *</label>
+            <input type="number" id="modalMealCalories" class="filter-input" min="0" max="10000" placeholder="0" required>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalMealPortionNotes">Portion Notes (Optional)</label>
+            <input type="text" id="modalMealPortionNotes" class="filter-input" placeholder="e.g. 2 rotis (~80g), 1 bowl dal (~150g)" maxlength="500">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="filter-label" for="modalMealProtein">Protein (g)</label>
+              <input type="number" id="modalMealProtein" class="filter-input" step="0.1" min="0" placeholder="0.0">
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="modalMealCarbs">Carbs (g)</label>
+              <input type="number" id="modalMealCarbs" class="filter-input" step="0.1" min="0" placeholder="0.0">
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="modalMealFat">Fat (g)</label>
+              <input type="number" id="modalMealFat" class="filter-input" step="0.1" min="0" placeholder="0.0">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="filter-label" for="modalMealDate">Date *</label>
+              <input type="date" id="modalMealDate" class="filter-input" required>
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="modalMealTime">Time</label>
+              <input type="text" id="modalMealTime" class="filter-input" placeholder="HH:MM" maxlength="8">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalMealNotes">Notes (Optional)</label>
+            <textarea id="modalMealNotes" class="filter-input" rows="2" maxlength="1000" placeholder="Cooking style, restaurant, mood, etc."></textarea>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+            <button type="button" class="btn-secondary" id="btnCancelMealModal">Cancel</button>
+            <button type="submit" class="btn-primary" id="btnSaveMealModal" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">Save Meal</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Health Profile & Calorie Target Configuration Modal -->
+    <div class="modal-overlay" id="healthProfileModal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title" id="profileModalTitle">Health Profile &amp; Calorie Target</h3>
+          <button type="button" class="modal-close" id="btnCloseHealthProfileModal" aria-label="Close modal">&times;</button>
+        </div>
+
+        <form id="healthProfileForm" style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-sm); padding: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">
+            🔒 <strong>100% Private &amp; Local:</strong> Your health profile is stored exclusively in your backend database. It is never transmitted to external AI providers or third parties.
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="profileCalorieTarget">Daily Calorie Target (kcal) *</label>
+            <input type="number" id="profileCalorieTarget" class="filter-input" min="500" max="10000" required>
+            <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">Setting an explicit target will clear the provisional default flag.</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: -0.25rem;">
+            <input type="checkbox" id="profileTargetProvisional" style="cursor: pointer;">
+            <label for="profileTargetProvisional" style="font-size: 0.8rem; color: var(--text-secondary); cursor: pointer;">
+              Keep flagged as provisional default (not personalized)
+            </label>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="filter-label" for="profileWeight">Weight (kg)</label>
+              <input type="number" id="profileWeight" class="filter-input" step="0.1" min="15" max="350" placeholder="e.g. 70.5">
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="profileHeight">Height (cm)</label>
+              <input type="number" id="profileHeight" class="filter-input" step="0.5" min="50" max="250" placeholder="e.g. 175">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group">
+              <label class="filter-label" for="profileAge">Age (years)</label>
+              <input type="number" id="profileAge" class="filter-input" min="1" max="120" placeholder="e.g. 28">
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="profileGender">Gender</label>
+              <input type="text" id="profileGender" class="filter-input" placeholder="e.g. Female, Male, Non-binary" maxlength="20">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="profileActivityLevel">Activity Level</label>
+            <select id="profileActivityLevel" class="filter-select">
+              <option value="">Select activity level...</option>
+              <option value="Sedentary (desk job, little exercise)">Sedentary (desk job, little exercise)</option>
+              <option value="Lightly active (light exercise 1-3 days/week)">Lightly active (light exercise 1-3 days/week)</option>
+              <option value="Moderately active (exercise 3-5 days/week)">Moderately active (exercise 3-5 days/week)</option>
+              <option value="Very active (hard exercise 6-7 days/week)">Very active (hard exercise 6-7 days/week)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="profileDietaryPreferences">Dietary Preferences</label>
+            <input type="text" id="profileDietaryPreferences" class="filter-input" placeholder="e.g. Vegetarian, High-protein, Lactose-free" maxlength="255">
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="profileNotes">Health Notes (Optional)</label>
+            <textarea id="profileNotes" class="filter-input" rows="2" maxlength="1000" placeholder="Fitness goals, medical considerations, dietary notes"></textarea>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+            <button type="button" class="btn-secondary" id="btnCancelHealthProfileModal">Cancel</button>
+            <button type="submit" class="btn-primary" id="btnSaveHealthProfile" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">Save Profile</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
 
     <!-- Toast Notifications Container -->
     <div class="toast-container" id="toastContainer" aria-live="polite"></div>

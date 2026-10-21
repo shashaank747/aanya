@@ -18,6 +18,9 @@ for path in [project_root, backend_dir]:
 
 from backend.core.config import get_settings
 from backend.core.database import Base
+# Register all module models so Alembic metadata detects them
+import backend.modules.finance.models  # noqa: F401
+import backend.modules.health.models  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -27,19 +30,24 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set database URL dynamically from app settings if not already provided
-db_url = config.get_main_option("sqlalchemy.url")
-if not db_url:
-    settings = get_settings()
-    db_url = settings.DATABASE_URL
-    config.set_main_option("sqlalchemy.url", db_url)
+# Determine database URL dynamically
+def get_db_url() -> str:
+    x_args = context.get_x_argument(as_dictionary=True)
+    if "url" in x_args:
+        return x_args["url"]
+    if os.environ.get("DATABASE_URL"):
+        return os.environ["DATABASE_URL"]
+    url = config.get_main_option("sqlalchemy.url")
+    if url:
+        return url
+    return get_settings().DATABASE_URL
 
 target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = get_db_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -57,7 +65,7 @@ def run_migrations_online() -> None:
     if configuration is None:
         configuration = {}
 
-    url = config.get_main_option("sqlalchemy.url") or get_settings().DATABASE_URL
+    url = get_db_url()
     configuration["sqlalchemy.url"] = url
 
     connectable = engine_from_config(
@@ -65,6 +73,7 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+
 
     with connectable.connect() as connection:
         context.configure(

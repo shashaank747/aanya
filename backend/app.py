@@ -25,6 +25,7 @@ from backend.modules.finance import router as finance_router
 from backend.modules.ocr import router as ocr_router
 from backend.modules.math_logic import router as math_logic_router
 from backend.modules.reminders import router as reminders_router
+from backend.modules.health import router as health_router
 
 # Configure logging
 logging.basicConfig(
@@ -167,6 +168,7 @@ app.include_router(finance_router, prefix="/api")
 app.include_router(ocr_router, prefix="/api")
 app.include_router(math_logic_router, prefix="/api")
 app.include_router(reminders_router, prefix="/api")
+app.include_router(health_router, prefix="/api")
 
 # Static frontend assets and PWA shell mounting (for local development without Caddy)
 _frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))

@@ -43,13 +43,27 @@ def test_service_worker():
 
 
 def test_static_assets_css_and_js():
-    """Verify styles.css and app.js are served correctly."""
+    """Verify styles.css and app.js are served correctly and include health tracker components."""
     css_res = client.get("/static/css/styles.css")
     assert css_res.status_code == 200
+    assert "health-stats-grid" in css_res.text
 
     js_res = client.get("/static/js/app.js")
     assert js_res.status_code == 200
     assert "checkHealth" in js_res.text
+    assert "loadDailyHealthSummary" in js_res.text
+    assert "loadHealthProfile" in js_res.text
+
+
+def test_index_html_contains_health_tracker():
+    """Verify index.html includes the Health Tracker tab, view, and modals."""
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "tabBtnHealth" in response.text
+    assert "viewHealth" in response.text
+    assert "healthProfileModal" in response.text
+    assert "mealModal" in response.text
+
 
 
 def test_static_icons():

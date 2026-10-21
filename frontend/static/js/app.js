@@ -10,29 +10,44 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================================
   const tabBtnAssistant = document.getElementById('tabBtnAssistant');
   const tabBtnFinance = document.getElementById('tabBtnFinance');
+  const tabBtnHealth = document.getElementById('tabBtnHealth');
   const btnOpenFinanceFromCard = document.getElementById('btnOpenFinanceFromCard');
+  const btnOpenHealthFromCard = document.getElementById('btnOpenHealthFromCard');
   const viewAssistant = document.getElementById('viewAssistant');
   const viewFinance = document.getElementById('viewFinance');
+  const viewHealth = document.getElementById('viewHealth');
 
   function switchTab(target) {
+    tabBtnAssistant.classList.remove('active');
+    tabBtnFinance.classList.remove('active');
+    if (tabBtnHealth) tabBtnHealth.classList.remove('active');
+    viewAssistant.classList.remove('active');
+    viewFinance.classList.remove('active');
+    if (viewHealth) viewHealth.classList.remove('active');
+
     if (target === 'finance') {
-      tabBtnAssistant.classList.remove('active');
       tabBtnFinance.classList.add('active');
-      viewAssistant.classList.remove('active');
       viewFinance.classList.add('active');
       loadFinanceDashboard();
       loadTransactions();
+    } else if (target === 'health') {
+      if (tabBtnHealth) tabBtnHealth.classList.add('active');
+      if (viewHealth) viewHealth.classList.add('active');
+      loadHealthProfile();
+      loadDailyHealthSummary();
+      loadHealthMeals();
     } else {
-      tabBtnFinance.classList.remove('active');
       tabBtnAssistant.classList.add('active');
-      viewFinance.classList.remove('active');
       viewAssistant.classList.add('active');
     }
   }
 
   if (tabBtnAssistant) tabBtnAssistant.addEventListener('click', () => switchTab('assistant'));
   if (tabBtnFinance) tabBtnFinance.addEventListener('click', () => switchTab('finance'));
+  if (tabBtnHealth) tabBtnHealth.addEventListener('click', () => switchTab('health'));
   if (btnOpenFinanceFromCard) btnOpenFinanceFromCard.addEventListener('click', () => switchTab('finance'));
+  if (btnOpenHealthFromCard) btnOpenHealthFromCard.addEventListener('click', () => switchTab('health'));
+
 
   // ============================================================================
   // 2. Core Health & System Verification
@@ -119,14 +134,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const decision = res.data;
 
         routingOutput.classList.add('active');
-        const isModuleActive = decision.intent === 'finance';
+        let statusMsg = '[Planned] Live processing will be enabled in subsequent phases.';
+        if (decision.intent === 'finance') {
+          statusMsg = '[ACTIVE] This module is ready in the Finance Tracker tab!';
+        } else if (decision.intent === 'health') {
+          statusMsg = '[ACTIVE] This module is ready in the Health Tracker tab!';
+        }
+
         routingBody.innerHTML = [
           `Detected Intent: <strong>${decision.intent.toUpperCase()}</strong>`,
           `Target Module:   <code>${decision.target_module}</code>`,
           `Confidence:      ${Math.round(decision.confidence * 100)}%`,
           `Explanation:     ${decision.explanation}`,
-          `\nModule Status:   ${isModuleActive ? '[ACTIVE] This module is ready in the Finance Tracker tab!' : '[Planned] Live processing will be enabled in subsequent phases.'}`,
+          `\nModule Status:   ${statusMsg}`,
         ].join('\n');
+
 
       } catch (err) {
         routingOutput.classList.add('active');
@@ -665,8 +687,635 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ============================================================================
-  // 10. PWA Service Worker & Install Prompt
+  // 10. Health Tracker Module: State & Controller
   // ============================================================================
+  let currentHealthProfile = null;
+  let currentEstimatedMealDraft = null;
+  let currentMealsPage = 1;
+  const MEALS_PAGE_SIZE = 15;
+
+  function getLocalIsoDate(d = new Date()) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function getLocalTimeStr(d = new Date()) {
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  }
+
+  // --- Profile Management ---
+  const healthProvisionalBanner = document.getElementById('healthProvisionalBanner');
+  const healthProvisionalBadge = document.getElementById('healthProvisionalBadge');
+  const btnConfigureProvisionalTarget = document.getElementById('btnConfigureProvisionalTarget');
+  const btnOpenHealthProfileModal = document.getElementById('btnOpenHealthProfileModal');
+  const healthProfileModal = document.getElementById('healthProfileModal');
+  const btnCloseHealthProfileModal = document.getElementById('btnCloseHealthProfileModal');
+  const btnCancelHealthProfileModal = document.getElementById('btnCancelHealthProfileModal');
+  const healthProfileForm = document.getElementById('healthProfileForm');
+
+  const profileCalorieTarget = document.getElementById('profileCalorieTarget');
+  const profileTargetProvisional = document.getElementById('profileTargetProvisional');
+  const profileWeight = document.getElementById('profileWeight');
+  const profileHeight = document.getElementById('profileHeight');
+  const profileAge = document.getElementById('profileAge');
+  const profileGender = document.getElementById('profileGender');
+  const profileActivityLevel = document.getElementById('profileActivityLevel');
+  const profileDietaryPreferences = document.getElementById('profileDietaryPreferences');
+  const profileNotes = document.getElementById('profileNotes');
+
+  async function loadHealthProfile() {
+    try {
+      const res = await fetch('/api/health-tracker/profile');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      currentHealthProfile = body.data;
+
+      const isProvisional = currentHealthProfile.target_is_provisional;
+      if (healthProvisionalBanner) {
+        healthProvisionalBanner.style.display = isProvisional ? 'flex' : 'none';
+      }
+      if (healthProvisionalBadge) {
+        healthProvisionalBadge.style.display = isProvisional ? 'inline-block' : 'none';
+        healthProvisionalBadge.textContent = isProvisional ? 'Provisional Default' : 'Personal Target';
+        healthProvisionalBadge.style.borderColor = isProvisional ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+        healthProvisionalBadge.style.color = isProvisional ? '#fbbf24' : '#34d399';
+      }
+      return currentHealthProfile;
+    } catch (err) {
+      console.warn('Failed to load health profile:', err);
+      return null;
+    }
+  }
+
+  function openHealthProfileModal() {
+    if (!currentHealthProfile) return;
+    profileCalorieTarget.value = currentHealthProfile.daily_calorie_target || 2000;
+    profileTargetProvisional.checked = !!currentHealthProfile.target_is_provisional;
+    profileWeight.value = currentHealthProfile.weight_kg || '';
+    profileHeight.value = currentHealthProfile.height_cm || '';
+    profileAge.value = currentHealthProfile.age || '';
+    profileGender.value = currentHealthProfile.gender || '';
+    profileActivityLevel.value = currentHealthProfile.activity_level || '';
+    profileDietaryPreferences.value = currentHealthProfile.dietary_preferences || '';
+    profileNotes.value = currentHealthProfile.notes || '';
+
+    healthProfileModal.classList.add('active');
+  }
+
+  function closeHealthProfileModal() {
+    healthProfileModal.classList.remove('active');
+  }
+
+  if (btnOpenHealthProfileModal) btnOpenHealthProfileModal.addEventListener('click', openHealthProfileModal);
+  if (btnConfigureProvisionalTarget) btnConfigureProvisionalTarget.addEventListener('click', openHealthProfileModal);
+  if (btnCloseHealthProfileModal) btnCloseHealthProfileModal.addEventListener('click', closeHealthProfileModal);
+  if (btnCancelHealthProfileModal) btnCancelHealthProfileModal.addEventListener('click', closeHealthProfileModal);
+
+  if (healthProfileForm) {
+    healthProfileForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const payload = {
+          daily_calorie_target: parseInt(profileCalorieTarget.value, 10),
+          target_is_provisional: profileTargetProvisional.checked,
+          weight_kg: profileWeight.value ? parseFloat(profileWeight.value) : null,
+          height_cm: profileHeight.value ? parseFloat(profileHeight.value) : null,
+          age: profileAge.value ? parseInt(profileAge.value, 10) : null,
+          gender: profileGender.value.trim() || null,
+          activity_level: profileActivityLevel.value || null,
+          dietary_preferences: profileDietaryPreferences.value.trim() || null,
+          notes: profileNotes.value.trim() || null,
+        };
+
+        const res = await fetch('/api/health-tracker/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error || `Failed to update profile: HTTP ${res.status}`);
+        }
+
+        const resData = await res.json();
+        currentHealthProfile = resData.data;
+        closeHealthProfileModal();
+        showToast('Health profile and calorie target updated!', 'success');
+        loadHealthProfile();
+        loadDailyHealthSummary();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  }
+
+  // --- Daily Nutrition Summary & Dashboard Metrics ---
+  const healthStatConsumed = document.getElementById('healthStatConsumed');
+  const healthStatTarget = document.getElementById('healthStatTarget');
+  const healthStatRemaining = document.getElementById('healthStatRemaining');
+  const healthStatPercent = document.getElementById('healthStatPercent');
+  const healthCalorieProgressBar = document.getElementById('healthCalorieProgressBar');
+  const healthSummaryDateLabel = document.getElementById('healthSummaryDateLabel');
+
+  const healthStatProtein = document.getElementById('healthStatProtein');
+  const healthStatCarbs = document.getElementById('healthStatCarbs');
+  const healthStatFat = document.getElementById('healthStatFat');
+  const healthProteinBar = document.getElementById('healthProteinBar');
+  const healthCarbsBar = document.getElementById('healthCarbsBar');
+  const healthFatBar = document.getElementById('healthFatBar');
+
+  const healthBreakfastCal = document.getElementById('healthBreakfastCal');
+  const healthLunchCal = document.getElementById('healthLunchCal');
+  const healthDinnerCal = document.getElementById('healthDinnerCal');
+  const healthSnackCal = document.getElementById('healthSnackCal');
+
+  async function loadDailyHealthSummary() {
+    try {
+      const clientDate = getLocalIsoDate();
+      const res = await fetch(`/api/health-tracker/daily-summary?client_date=${clientDate}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      const summary = body.data;
+
+      if (healthStatConsumed) healthStatConsumed.textContent = summary.calories_consumed.toLocaleString();
+      if (healthStatTarget) healthStatTarget.textContent = summary.calorie_target.toLocaleString();
+      if (healthStatRemaining) healthStatRemaining.textContent = summary.calories_remaining.toLocaleString();
+      if (healthStatPercent) healthStatPercent.textContent = `${summary.percentage_consumed}%`;
+
+      if (healthCalorieProgressBar) {
+        const pct = Math.min(100, summary.percentage_consumed);
+        healthCalorieProgressBar.style.width = `${pct}%`;
+        if (summary.calories_consumed > summary.calorie_target) {
+          healthCalorieProgressBar.style.background = 'linear-gradient(90deg, #f59e0b, #ef4444)';
+        } else {
+          healthCalorieProgressBar.style.background = 'linear-gradient(90deg, #10b981, #34d399)';
+        }
+      }
+
+      if (healthSummaryDateLabel) {
+        healthSummaryDateLabel.textContent = summary.client_date;
+      }
+
+      const p = parseFloat(summary.total_protein_g) || 0;
+      const c = parseFloat(summary.total_carbs_g) || 0;
+      const f = parseFloat(summary.total_fat_g) || 0;
+      if (healthStatProtein) healthStatProtein.textContent = p.toFixed(1);
+      if (healthStatCarbs) healthStatCarbs.textContent = c.toFixed(1);
+      if (healthStatFat) healthStatFat.textContent = f.toFixed(1);
+
+      const macroTotal = (p * 4) + (c * 4) + (f * 9);
+      if (macroTotal > 0) {
+        if (healthProteinBar) healthProteinBar.style.width = `${Math.round(((p * 4) / macroTotal) * 100)}%`;
+        if (healthCarbsBar) healthCarbsBar.style.width = `${Math.round(((c * 4) / macroTotal) * 100)}%`;
+        if (healthFatBar) healthFatBar.style.width = `${Math.round(((f * 9) / macroTotal) * 100)}%`;
+      } else {
+        if (healthProteinBar) healthProteinBar.style.width = '0%';
+        if (healthCarbsBar) healthCarbsBar.style.width = '0%';
+        if (healthFatBar) healthFatBar.style.width = '0%';
+      }
+
+      const typeMap = {};
+      summary.meal_type_breakdown.forEach(item => {
+        typeMap[item.meal_type] = item.calories;
+      });
+      if (healthBreakfastCal) healthBreakfastCal.textContent = `${typeMap['breakfast'] || 0} kcal`;
+      if (healthLunchCal) healthLunchCal.textContent = `${typeMap['lunch'] || 0} kcal`;
+      if (healthDinnerCal) healthDinnerCal.textContent = `${typeMap['dinner'] || 0} kcal`;
+      if (healthSnackCal) healthSnackCal.textContent = `${typeMap['snack'] || 0} kcal`;
+
+    } catch (err) {
+      console.warn('Failed to load daily health summary:', err);
+    }
+  }
+
+  // --- Meal History & List Management ---
+  const mealsContainer = document.getElementById('mealsContainer');
+  const healthFilterDate = document.getElementById('healthFilterDate');
+  const healthFilterType = document.getElementById('healthFilterType');
+  const btnResetHealthFilters = document.getElementById('btnResetHealthFilters');
+  const mealsPaginationControls = document.getElementById('mealsPaginationControls');
+  const btnPrevMealsPage = document.getElementById('btnPrevMealsPage');
+  const btnNextMealsPage = document.getElementById('btnNextMealsPage');
+  const mealsPageIndicator = document.getElementById('mealsPageIndicator');
+
+  if (healthFilterDate && !healthFilterDate.value) {
+    healthFilterDate.value = getLocalIsoDate();
+  }
+
+  async function loadHealthMeals(page = 1) {
+    currentMealsPage = page;
+    if (!mealsContainer) return;
+
+    mealsContainer.innerHTML = '<div class="state-box"><span class="state-icon">⏳</span><p>Loading meal history...</p></div>';
+
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        page_size: MEALS_PAGE_SIZE.toString(),
+      });
+      if (healthFilterDate && healthFilterDate.value) {
+        params.append('start_date', healthFilterDate.value);
+        params.append('end_date', healthFilterDate.value);
+      }
+      if (healthFilterType && healthFilterType.value) {
+        params.append('meal_type', healthFilterType.value);
+      }
+
+      const res = await fetch(`/api/health-tracker/meals?${params.toString()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      const paged = body.data;
+
+      if (!paged.items || paged.items.length === 0) {
+        mealsContainer.innerHTML = `
+          <div class="state-box">
+            <span class="state-icon">🥗</span>
+            <strong>No meals found</strong>
+            <p>No meals match the selected date or filters. Log a meal above to track your calories.</p>
+          </div>
+        `;
+        if (mealsPaginationControls) mealsPaginationControls.style.display = 'none';
+        return;
+      }
+
+      mealsContainer.innerHTML = '';
+      paged.items.forEach(meal => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'tx-item';
+        itemEl.id = `meal-item-${meal.id}`;
+
+        const typeClass = `meal-type-${meal.meal_type}`;
+        const p = meal.protein_g ? `${parseFloat(meal.protein_g).toFixed(1)}g P` : '';
+        const c = meal.carbs_g ? `${parseFloat(meal.carbs_g).toFixed(1)}g C` : '';
+        const f = meal.fat_g ? `${parseFloat(meal.fat_g).toFixed(1)}g F` : '';
+        const macrosArr = [p, c, f].filter(Boolean);
+        const macrosStr = macrosArr.length > 0 ? ` &bull; ${macrosArr.join(', ')}` : '';
+
+        itemEl.innerHTML = `
+          <div class="tx-info">
+            <div class="tx-top-line">
+              <span class="meal-type-badge ${typeClass}">${meal.meal_type}</span>
+              <span class="tx-desc" style="font-weight: 600;">${escapeHtml(meal.food_items)}</span>
+              ${meal.is_estimated ? '<span class="pill-badge" style="font-size: 0.68rem; background: rgba(56, 189, 248, 0.12); color: #38bdf8;">Estimated</span>' : ''}
+            </div>
+            <div class="tx-bottom-line">
+              <span>📅 ${meal.meal_date} ${meal.meal_time ? `&bull; ⏰ ${meal.meal_time}` : ''}</span>
+              ${meal.portion_notes ? `<span>&bull; <em>${escapeHtml(meal.portion_notes)}</em></span>` : ''}
+              ${macrosStr ? `<span>${macrosStr}</span>` : ''}
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.85rem;">
+            <div style="text-align: right;">
+              <span style="font-size: 1.15rem; font-weight: 700; color: #34d399; font-family: var(--font-mono);">
+                ${meal.calories} kcal
+              </span>
+            </div>
+            <div style="display: flex; gap: 0.35rem;">
+              <button type="button" class="btn-secondary btn-edit-meal" data-id="${meal.id}" title="Edit meal" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">✏️</button>
+              <button type="button" class="btn-secondary btn-delete-meal" data-id="${meal.id}" title="Delete meal" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: #f87171;">🗑️</button>
+            </div>
+          </div>
+        `;
+        mealsContainer.appendChild(itemEl);
+      });
+
+      mealsContainer.querySelectorAll('.btn-edit-meal').forEach(btn => {
+        btn.addEventListener('click', () => openMealModalForEdit(btn.getAttribute('data-id')));
+      });
+      mealsContainer.querySelectorAll('.btn-delete-meal').forEach(btn => {
+        btn.addEventListener('click', () => deleteMeal(btn.getAttribute('data-id')));
+      });
+
+      if (mealsPaginationControls) {
+        if (paged.total_pages > 1) {
+          mealsPaginationControls.style.display = 'flex';
+          mealsPageIndicator.textContent = `Page ${paged.page} of ${paged.total_pages} (${paged.total} meals)`;
+          btnPrevMealsPage.disabled = paged.page <= 1;
+          btnNextMealsPage.disabled = paged.page >= paged.total_pages;
+        } else {
+          mealsPaginationControls.style.display = 'none';
+        }
+      }
+
+    } catch (err) {
+      mealsContainer.innerHTML = `<div class="state-box"><span class="state-icon">⚠️</span><p>Error loading meals: ${err.message}</p></div>`;
+    }
+  }
+
+  if (healthFilterDate) healthFilterDate.addEventListener('change', () => loadHealthMeals(1));
+  if (healthFilterType) healthFilterType.addEventListener('change', () => loadHealthMeals(1));
+  if (btnResetHealthFilters) {
+    btnResetHealthFilters.addEventListener('click', () => {
+      if (healthFilterDate) healthFilterDate.value = getLocalIsoDate();
+      if (healthFilterType) healthFilterType.value = '';
+      loadHealthMeals(1);
+    });
+  }
+  if (btnPrevMealsPage) btnPrevMealsPage.addEventListener('click', () => {
+    if (currentMealsPage > 1) loadHealthMeals(currentMealsPage - 1);
+  });
+  if (btnNextMealsPage) btnNextMealsPage.addEventListener('click', () => {
+    loadHealthMeals(currentMealsPage + 1);
+  });
+
+  // --- Natural-Language Meal Estimation & Review ---
+  const healthNlpForm = document.getElementById('healthNlpForm');
+  const healthNlpInput = document.getElementById('healthNlpInput');
+  const btnHealthNlpEstimate = document.getElementById('btnHealthNlpEstimate');
+  const healthMealReviewCard = document.getElementById('healthMealReviewCard');
+  const healthAssumedPortionsList = document.getElementById('healthAssumedPortionsList');
+  const healthEstimateAlertBanner = document.getElementById('healthEstimateAlertBanner');
+  const healthMealReviewForm = document.getElementById('healthMealReviewForm');
+  const btnDiscardHealthReview = document.getElementById('btnDiscardHealthReview');
+
+  const reviewMealType = document.getElementById('reviewMealType');
+  const reviewMealCalories = document.getElementById('reviewMealCalories');
+  const reviewMealDate = document.getElementById('reviewMealDate');
+  const reviewMealTime = document.getElementById('reviewMealTime');
+  const reviewMealFoodItems = document.getElementById('reviewMealFoodItems');
+  const reviewMealPortionNotes = document.getElementById('reviewMealPortionNotes');
+  const reviewMealProtein = document.getElementById('reviewMealProtein');
+  const reviewMealCarbs = document.getElementById('reviewMealCarbs');
+  const reviewMealFat = document.getElementById('reviewMealFat');
+
+  document.querySelectorAll('#viewHealth .quick-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const phrase = chip.getAttribute('data-phrase');
+      if (healthNlpInput && phrase) {
+        healthNlpInput.value = phrase;
+        healthNlpInput.focus();
+      }
+    });
+  });
+
+  if (healthNlpForm) {
+    healthNlpForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = healthNlpInput.value.trim();
+      if (!text) return;
+
+      btnHealthNlpEstimate.disabled = true;
+      btnHealthNlpEstimate.textContent = 'Estimating...';
+
+      try {
+        const clientDate = getLocalIsoDate();
+        const res = await fetch('/api/health-tracker/estimate-meal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: text,
+            meal_date: clientDate,
+          }),
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error || `Estimation failed: HTTP ${res.status}`);
+        }
+
+        const resData = await res.json();
+        const draft = resData.data;
+        currentEstimatedMealDraft = draft;
+
+        healthAssumedPortionsList.innerHTML = '';
+        draft.items.forEach(it => {
+          const row = document.createElement('div');
+          row.className = `portion-item-row ${!it.is_supported ? 'portion-item-warning' : ''}`;
+          row.innerHTML = `
+            <div>
+              <strong>${escapeHtml(it.matched_food_name || it.raw_item_text)}</strong>
+              <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">${escapeHtml(it.assumed_portion)}</span>
+            </div>
+            <div style="text-align: right;">
+              <span style="font-weight: 700; color: ${it.is_supported ? '#34d399' : '#f87171'};">
+                ${it.calories} kcal
+              </span>
+              ${it.protein_g ? `<span style="font-size: 0.72rem; color: var(--text-muted); display: block;">${it.protein_g}g P &bull; ${it.carbs_g}g C &bull; ${it.fat_g}g F</span>` : ''}
+            </div>
+          `;
+          healthAssumedPortionsList.appendChild(row);
+        });
+
+        if (draft.has_unsupported_items) {
+          healthEstimateAlertBanner.style.display = 'block';
+          healthEstimateAlertBanner.style.background = 'rgba(239, 68, 68, 0.1)';
+          healthEstimateAlertBanner.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+          healthEstimateAlertBanner.style.color = '#fca5a5';
+          healthEstimateAlertBanner.innerHTML = `
+            ⚠️ <strong>Unsupported Foods Flagged:</strong> Could not find verified reference nutritional data for: <em>${escapeHtml(draft.unsupported_items.join(', '))}</em>.<br>
+            Please enter your estimated calories manually in the form below before confirming.
+          `;
+        } else {
+          healthEstimateAlertBanner.style.display = 'block';
+          healthEstimateAlertBanner.style.background = 'rgba(16, 185, 129, 0.08)';
+          healthEstimateAlertBanner.style.border = '1px solid rgba(16, 185, 129, 0.25)';
+          healthEstimateAlertBanner.style.color = '#6ee7b7';
+          healthEstimateAlertBanner.innerHTML = `
+            ✓ Standard reference portions applied. Total estimated: <strong>${draft.total_calories} kcal</strong>. Please review and confirm to save.
+          `;
+        }
+
+        reviewMealType.value = draft.interpreted.meal_type;
+        reviewMealCalories.value = draft.interpreted.calories;
+        reviewMealDate.value = draft.interpreted.meal_date || clientDate;
+        reviewMealTime.value = draft.interpreted.meal_time || getLocalTimeStr();
+        reviewMealFoodItems.value = draft.interpreted.food_items;
+        reviewMealPortionNotes.value = draft.interpreted.portion_notes || '';
+        reviewMealProtein.value = draft.interpreted.protein_g ? parseFloat(draft.interpreted.protein_g) : '';
+        reviewMealCarbs.value = draft.interpreted.carbs_g ? parseFloat(draft.interpreted.carbs_g) : '';
+        reviewMealFat.value = draft.interpreted.fat_g ? parseFloat(draft.interpreted.fat_g) : '';
+
+        healthMealReviewCard.classList.add('active');
+        healthMealReviewCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btnHealthNlpEstimate.disabled = false;
+        btnHealthNlpEstimate.textContent = 'Estimate & Review';
+      }
+    });
+  }
+
+  if (btnDiscardHealthReview) {
+    btnDiscardHealthReview.addEventListener('click', () => {
+      healthMealReviewCard.classList.remove('active');
+      currentEstimatedMealDraft = null;
+      if (healthNlpInput) healthNlpInput.value = '';
+    });
+  }
+
+  if (healthMealReviewForm) {
+    healthMealReviewForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const payload = {
+          meal_type: reviewMealType.value,
+          calories: parseInt(reviewMealCalories.value, 10),
+          meal_date: reviewMealDate.value,
+          meal_time: reviewMealTime.value.trim() || null,
+          food_items: reviewMealFoodItems.value.trim(),
+          portion_notes: reviewMealPortionNotes.value.trim() || null,
+          protein_g: reviewMealProtein.value ? parseFloat(reviewMealProtein.value) : null,
+          carbs_g: reviewMealCarbs.value ? parseFloat(reviewMealCarbs.value) : null,
+          fat_g: reviewMealFat.value ? parseFloat(reviewMealFat.value) : null,
+          is_estimated: true,
+          estimation_notes: currentEstimatedMealDraft ? currentEstimatedMealDraft.message : 'Confirmed from estimation draft',
+        };
+
+        const res = await fetch('/api/health-tracker/meals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error || `Failed to save meal: HTTP ${res.status}`);
+        }
+
+        healthMealReviewCard.classList.remove('active');
+        currentEstimatedMealDraft = null;
+        if (healthNlpInput) healthNlpInput.value = '';
+
+        showToast('Meal confirmed and saved to your health ledger!', 'success');
+        loadDailyHealthSummary();
+        loadHealthMeals(1);
+
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  }
+
+  // --- Manual Meal Entry / Edit Modal ---
+  const mealModal = document.getElementById('mealModal');
+  const mealModalTitle = document.getElementById('mealModalTitle');
+  const btnCloseMealModal = document.getElementById('btnCloseMealModal');
+  const btnCancelMealModal = document.getElementById('btnCancelMealModal');
+  const btnOpenNewMealModal = document.getElementById('btnOpenNewMealModal');
+  const modalMealForm = document.getElementById('modalMealForm');
+  const modalMealId = document.getElementById('modalMealId');
+
+  const modalMealType = document.getElementById('modalMealType');
+  const modalMealFoodItems = document.getElementById('modalMealFoodItems');
+  const modalMealCalories = document.getElementById('modalMealCalories');
+  const modalMealPortionNotes = document.getElementById('modalMealPortionNotes');
+  const modalMealProtein = document.getElementById('modalMealProtein');
+  const modalMealCarbs = document.getElementById('modalMealCarbs');
+  const modalMealFat = document.getElementById('modalMealFat');
+  const modalMealDate = document.getElementById('modalMealDate');
+  const modalMealTime = document.getElementById('modalMealTime');
+  const modalMealNotes = document.getElementById('modalMealNotes');
+
+  function openNewMealModal() {
+    modalMealId.value = '';
+    mealModalTitle.textContent = 'Log New Meal';
+    modalMealForm.reset();
+    modalMealDate.value = getLocalIsoDate();
+    modalMealTime.value = getLocalTimeStr();
+    mealModal.classList.add('active');
+  }
+
+  async function openMealModalForEdit(mealId) {
+    try {
+      const res = await fetch(`/api/health-tracker/meals/${mealId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      const meal = body.data;
+
+      modalMealId.value = meal.id;
+      mealModalTitle.textContent = 'Edit Meal Log';
+      modalMealType.value = meal.meal_type;
+      modalMealFoodItems.value = meal.food_items;
+      modalMealCalories.value = meal.calories;
+      modalMealPortionNotes.value = meal.portion_notes || '';
+      modalMealProtein.value = meal.protein_g ? parseFloat(meal.protein_g) : '';
+      modalMealCarbs.value = meal.carbs_g ? parseFloat(meal.carbs_g) : '';
+      modalMealFat.value = meal.fat_g ? parseFloat(meal.fat_g) : '';
+      modalMealDate.value = meal.meal_date;
+      modalMealTime.value = meal.meal_time || '';
+      modalMealNotes.value = meal.notes || '';
+
+      mealModal.classList.add('active');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  function closeMealModal() {
+    mealModal.classList.remove('active');
+  }
+
+  if (btnOpenNewMealModal) btnOpenNewMealModal.addEventListener('click', openNewMealModal);
+  if (btnCloseMealModal) btnCloseMealModal.addEventListener('click', closeMealModal);
+  if (btnCancelMealModal) btnCancelMealModal.addEventListener('click', closeMealModal);
+
+  if (modalMealForm) {
+    modalMealForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const isEdit = !!modalMealId.value;
+        const payload = {
+          meal_type: modalMealType.value,
+          food_items: modalMealFoodItems.value.trim(),
+          calories: parseInt(modalMealCalories.value, 10),
+          portion_notes: modalMealPortionNotes.value.trim() || null,
+          protein_g: modalMealProtein.value ? parseFloat(modalMealProtein.value) : null,
+          carbs_g: modalMealCarbs.value ? parseFloat(modalMealCarbs.value) : null,
+          fat_g: modalMealFat.value ? parseFloat(modalMealFat.value) : null,
+          meal_date: modalMealDate.value,
+          meal_time: modalMealTime.value.trim() || null,
+          notes: modalMealNotes.value.trim() || null,
+        };
+
+        const url = isEdit ? `/api/health-tracker/meals/${modalMealId.value}` : '/api/health-tracker/meals';
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error || `Failed to save meal: HTTP ${res.status}`);
+        }
+
+        closeMealModal();
+        showToast(isEdit ? 'Meal updated successfully!' : 'Meal logged successfully!', 'success');
+        loadDailyHealthSummary();
+        loadHealthMeals(currentMealsPage);
+
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  }
+
+  async function deleteMeal(mealId) {
+    if (!confirm('Are you sure you want to delete this meal log?')) return;
+    try {
+      const res = await fetch(`/api/health-tracker/meals/${mealId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Meal log deleted.', 'success');
+      loadDailyHealthSummary();
+      loadHealthMeals(currentMealsPage);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  // ============================================================================
+  // 11. PWA Service Worker & Install Prompt
+  // ============================================================================
+
   let deferredInstallPrompt = null;
   const installBanner = document.getElementById('installBanner');
   const installBtn = document.getElementById('installBtn');

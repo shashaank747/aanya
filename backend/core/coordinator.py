@@ -18,11 +18,13 @@ class IntentType(str, Enum):
     """Categorized assistant intents corresponding to feature modules."""
     JOBS = "jobs"
     FINANCE = "finance"
+    HEALTH = "health"
     OCR = "ocr"
     MATH_LOGIC = "math_logic"
     REMINDERS = "reminders"
     GENERAL = "general"
     UNKNOWN = "unknown"
+
 
 
 class AssistantRequest(BaseModel):
@@ -60,7 +62,15 @@ class Coordinator:
         "money": IntentType.FINANCE,
         "rupee": IntentType.FINANCE,
         "₹": IntentType.FINANCE,
-        "dinner": IntentType.FINANCE,
+        "calorie": IntentType.HEALTH,
+        "calories": IntentType.HEALTH,
+        "kcal": IntentType.HEALTH,
+        "nutrition": IntentType.HEALTH,
+        "diet": IntentType.HEALTH,
+        "meal": IntentType.HEALTH,
+        "ate": IntentType.HEALTH,
+        "breakfast": IntentType.HEALTH,
+        "food": IntentType.HEALTH,
         "groceries": IntentType.FINANCE,
         "bill": IntentType.FINANCE,
         "scan": IntentType.OCR,
@@ -77,14 +87,17 @@ class Coordinator:
 
     def classify_intent(self, text: str) -> IntentType:
         """
-        Lightweight heuristic classifier.
+        Lightweight heuristic classifier using word boundary regex.
         Will be replaced or augmented by an intent classification model in future phases.
         """
+        import re
         lower_text = text.lower()
         for keyword, intent in self._KEYWORD_MAP.items():
-            if keyword in lower_text:
+            pattern = rf"\b{re.escape(keyword)}\b" if keyword.isalnum() else re.escape(keyword)
+            if re.search(pattern, lower_text):
                 return intent
         return IntentType.GENERAL if text.strip() else IntentType.UNKNOWN
+
 
     def route(self, request: AssistantRequest) -> RoutingDecision:
         """
@@ -95,6 +108,7 @@ class Coordinator:
         module_target_map = {
             IntentType.JOBS: "backend.modules.jobs",
             IntentType.FINANCE: "backend.modules.finance",
+            IntentType.HEALTH: "backend.modules.health",
             IntentType.OCR: "backend.modules.ocr",
             IntentType.MATH_LOGIC: "backend.modules.math_logic",
             IntentType.REMINDERS: "backend.modules.reminders",
