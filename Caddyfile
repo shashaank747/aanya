@@ -1,0 +1,46 @@
+# ==============================================================================
+# Caddy Configuration for Aanya Assistant
+# ==============================================================================
+# Local Development: Defaults to 'localhost' on HTTP/self-signed HTTPS
+# Production Deployment: Set DOMAIN_NAME in .env (e.g., aanya.example.com)
+# Caddy will automatically issue and manage Let's Encrypt TLS certificates.
+# ==============================================================================
+
+{$DOMAIN_NAME:localhost} {
+    # Encode responses using modern compression algorithms
+    encode zstd gzip
+
+    # Security Headers Baseline
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    # Reverse proxy API requests directly to FastAPI backend container
+    # Note: 'handle /api/*' preserves the /api path prefix expected by FastAPI
+    handle /api/* {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Proxy OpenAPI documentation during development
+    handle /docs* {
+        reverse_proxy backend:8000
+    }
+    handle /openapi.json {
+        reverse_proxy backend:8000
+    }
+
+    # Serve static frontend assets & PWA shell
+    handle {
+        root * /srv/frontend
+        file_server
+        try_files {path} /index.html
+    }
+}

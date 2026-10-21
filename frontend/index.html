@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Aanya — Personal AI Assistant &amp; Finance Tracker</title>
+  <meta name="description" content="Aanya is a self-hosted personal AI assistant with a built-in deterministic Finance Tracker, supporting income & expense management, natural-language entry, and SQL analytics.">
+  <meta name="theme-color" content="#090d16">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Aanya">
+
+  <!-- PWA Manifest & Icons -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+  <!-- Core Local Stylesheet (No third-party CDN dependency) -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header Bar -->
+    <header class="header-bar" role="banner">
+      <div class="brand">
+        <img src="/static/icons/icon.svg" alt="Aanya Logo" class="brand-icon" width="36" height="36">
+        <div>
+          <span class="brand-name">Aanya</span>
+          <span class="brand-badge">Self-Hosted</span>
+        </div>
+      </div>
+
+      <!-- Live Backend Health Indicator -->
+      <div class="status-badge checking" id="statusBadge" aria-live="polite" title="Current backend connection status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="statusText">Checking...</span>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs" aria-label="Aanya Navigation">
+      <button class="nav-tab active" id="tabBtnAssistant" type="button">
+        <span>🤖 Assistant Overview</span>
+      </button>
+      <button class="nav-tab" id="tabBtnFinance" type="button">
+        <span>💳 Finance Tracker</span>
+        <span class="tab-badge">Active</span>
+      </button>
+    </nav>
+
+    <!-- Install App Banner (Appears on Supported Browsers) -->
+    <aside class="install-banner" id="installBanner" aria-label="Installation prompt">
+      <div>
+        <strong>Install Aanya PWA</strong>
+        <p style="font-size: 0.8rem; color: var(--text-secondary);">Install to your home screen or desktop for fast standalone access.</p>
+      </div>
+      <button class="btn-primary" id="installBtn" type="button" style="padding: 0.4rem 0.85rem; font-size: 0.85rem;">Install</button>
+    </aside>
+
+    <!-- TAB 1: ASSISTANT OVERVIEW -->
+    <div class="tab-content active" id="viewAssistant">
+      <!-- Hero Section -->
+      <section class="hero" aria-labelledby="main-heading">
+        <h1 id="main-heading">Meet Aanya</h1>
+        <p class="hero-sub">
+          Aanya is your self-hosted personal AI assistant designed to run securely on your private infrastructure,
+          accessible from Android Chrome and desktop Chrome. Its first functional domain module, the
+          <strong>Finance Tracker</strong>, is now active and backed by PostgreSQL with NUMERIC precision.
+        </p>
+
+        <div class="status-banner" role="status">
+          <span class="status-banner-icon" aria-hidden="true">ℹ️</span>
+          <div>
+            <strong>Module Status:</strong>
+            Finance Tracker is fully operational. Other modules (Jobs, OCR, Math Logic, Reminders) are structured as lightweight architectural boundaries.
+          </div>
+        </div>
+      </section>
+
+      <!-- Interactive Routing Boundary Preview -->
+      <section class="preview-section" aria-labelledby="preview-heading">
+        <div class="card-header">
+          <h2 id="preview-heading" class="section-label">Coordinator Gateway Preview</h2>
+          <span class="pill-badge">Intent Router</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">
+          Test how incoming queries are classified and dispatched to feature modules:
+        </p>
+
+        <form id="queryForm" class="input-group">
+          <label for="queryInput" class="visually-hidden" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0);">Assistant Query</label>
+          <input
+            type="text"
+            id="queryInput"
+            class="input-box"
+            placeholder="Try: 'Spent ₹180 on dinner' or 'Remind me tomorrow at 9 AM'..."
+            required
+          >
+          <button type="submit" id="routeBtn" class="btn-primary">
+            Test Routing
+          </button>
+        </form>
+
+        <!-- Output from Coordinator -->
+        <div id="routingOutput" class="routing-output" aria-live="polite">
+          <div class="routing-output-header">
+            <span>Coordinator Routing Resolution</span>
+            <button type="button" class="btn-secondary" onclick="document.getElementById('routingOutput').classList.remove('active')">Dismiss</button>
+          </div>
+          <div id="routingBody" class="routing-output-body"></div>
+        </div>
+      </section>
+
+      <!-- Modular Capabilities Grid -->
+      <section aria-labelledby="capabilities-heading">
+        <div class="card-header" style="margin-bottom: 0.75rem;">
+          <h2 id="capabilities-heading" class="section-label">Capability Modules</h2>
+          <span class="pill-badge">1 Active &bull; 4 Planned</span>
+        </div>
+
+        <div class="capabilities-grid">
+          <!-- 1. Finance (ACTIVE) -->
+          <article class="capability-card" id="card-finance" style="border-color: var(--accent-indigo); background: linear-gradient(180deg, var(--bg-secondary) 0%, rgba(99, 102, 241, 0.08) 100%);">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="card-icon" aria-hidden="true">💳</span>
+                <h3 class="card-title">Finance Tracker</h3>
+              </div>
+              <span class="tab-badge">Active</span>
+            </div>
+            <p class="card-desc">
+              Record income and expenses with NUMERIC decimal precision, deterministic SQL monthly totals, category breakdown, and natural-language entry.
+            </p>
+            <div class="card-footer">
+              <span class="card-status-text">Module: <code>/api/finance</code></span>
+              <button class="btn-primary" id="btnOpenFinanceFromCard" type="button" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">Open Tracker &rarr;</button>
+            </div>
+          </article>
+
+          <!-- 2. Jobs -->
+          <article class="capability-card" id="card-jobs">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="card-icon" aria-hidden="true">💼</span>
+                <h3 class="card-title">Job Application Tracking</h3>
+              </div>
+              <span class="pill-badge">Planned</span>
+            </div>
+            <p class="card-desc">
+              Track active job submissions, manage recruiter follow-ups, store interview notes, and log role statuses across companies.
+            </p>
+            <div class="card-footer">
+              <span class="card-status-text">Module: <code>/api/jobs</code></span>
+              <button class="btn-card-disabled" disabled aria-disabled="true">Coming Soon</button>
+            </div>
+          </article>
+
+          <!-- 3. OCR -->
+          <article class="capability-card" id="card-ocr">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="card-icon" aria-hidden="true">📄</span>
+                <h3 class="card-title">Document &amp; Receipt OCR</h3>
+              </div>
+              <span class="pill-badge">Planned</span>
+            </div>
+            <p class="card-desc">
+              Extract text from screenshots, documents, and paper receipts with automated parsing for ledger integration.
+            </p>
+            <div class="card-footer">
+              <span class="card-status-text">Module: <code>/api/ocr</code></span>
+              <button class="btn-card-disabled" disabled aria-disabled="true">Coming Soon</button>
+            </div>
+          </article>
+
+          <!-- 4. Math & Logic -->
+          <article class="capability-card" id="card-math">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="card-icon" aria-hidden="true">🧮</span>
+                <h3 class="card-title">Math &amp; Deterministic Logic</h3>
+              </div>
+              <span class="pill-badge">Planned</span>
+            </div>
+            <p class="card-desc">
+              Perform precision math computations, unit &amp; currency conversions, equation evaluation, and deterministic reasoning tasks.
+            </p>
+            <div class="card-footer">
+              <span class="card-status-text">Module: <code>/api/math-logic</code></span>
+              <button class="btn-card-disabled" disabled aria-disabled="true">Coming Soon</button>
+            </div>
+          </article>
+
+          <!-- 5. Reminders -->
+          <article class="capability-card" id="card-reminders" style="grid-column: 1 / -1;">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="card-icon" aria-hidden="true">⏰</span>
+                <h3 class="card-title">Scheduled Reminders &amp; Push Alerts</h3>
+              </div>
+              <span class="pill-badge">Planned</span>
+            </div>
+            <p class="card-desc">
+              Time-based alerts and WebPush notifications for Android Chrome and desktop Chrome. Backed by persistent scheduling once the database job store is enabled.
+            </p>
+            <div class="card-footer">
+              <span class="card-status-text">Module: <code>/api/reminders</code></span>
+              <button class="btn-card-disabled" disabled aria-disabled="true">Coming Soon</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- System Diagnostic Panel -->
+      <section class="diagnostic-panel" aria-labelledby="diag-heading">
+        <div class="diagnostic-header">
+          <span id="diag-heading">Runtime Infrastructure Health</span>
+          <button id="refreshHealthBtn" type="button" class="btn-secondary">Check Now</button>
+        </div>
+
+        <div class="diagnostic-grid">
+          <div class="diag-item">
+            <span class="diag-label">PostgreSQL</span>
+            <span id="diagDb" class="diag-val">Checking...</span>
+          </div>
+          <div class="diag-item">
+            <span class="diag-label">Environment</span>
+            <span id="diagEnv" class="diag-val">Checking...</span>
+          </div>
+          <div class="diag-item">
+            <span class="diag-label">Version</span>
+            <span id="diagVersion" class="diag-val">Checking...</span>
+          </div>
+          <div class="diag-item">
+            <span class="diag-label">Scheduler</span>
+            <span id="diagScheduler" class="diag-val">Checking...</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 2: FINANCE TRACKER -->
+    <div class="tab-content" id="viewFinance">
+      <!-- Finance Header & Quick Actions -->
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+          <h2 style="font-size: 1.4rem; font-weight: 800;">Personal Finance Tracker</h2>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">Authoritative ledger calculations backed by PostgreSQL NUMERIC &bull; Currency: INR (₹)</p>
+        </div>
+        <button class="btn-primary" id="btnOpenNewTxModal" type="button">
+          <span>+ Add Transaction</span>
+        </button>
+      </div>
+
+      <!-- Month Summary Cards -->
+      <section class="finance-stats-grid" aria-label="Monthly Financial Summary">
+        <div class="stat-card">
+          <span class="stat-label">Income (This Month)</span>
+          <span class="stat-value income" id="finStatIncome">₹0.00</span>
+          <span class="stat-sub">Deterministic SQL sum</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Expenses (This Month)</span>
+          <span class="stat-value expense" id="finStatExpense">₹0.00</span>
+          <span class="stat-sub">Deterministic SQL sum</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Net Balance (This Month)</span>
+          <span class="stat-value balance-pos" id="finStatBalance">₹0.00</span>
+          <span class="stat-sub" id="finStatBalanceSub">Income minus expenses</span>
+        </div>
+      </section>
+
+      <!-- Natural-Language Entry Box -->
+      <section class="nlp-box" aria-labelledby="nlp-heading">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 id="nlp-heading" style="font-size: 0.95rem; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.4rem;">
+            <span>⚡ Natural-Language Entry</span>
+          </h3>
+          <span class="pill-badge">Confirmation Required</span>
+        </div>
+        <p style="font-size: 0.8rem; color: var(--text-secondary);">
+          Type an income or expense in plain English. The parser extracts fields and requests your explicit confirmation before saving:
+        </p>
+
+        <form id="nlpForm" class="input-group">
+          <input
+            type="text"
+            id="nlpInput"
+            class="input-box"
+            placeholder="e.g., 'I spent ₹180 on dinner' or 'Received ₹5,000 from freelance work'..."
+            required
+          >
+          <button type="submit" id="btnNlpParse" class="btn-primary">
+            Parse &amp; Review
+          </button>
+        </form>
+
+        <!-- Quick Sample Chips -->
+        <div class="quick-chips">
+          <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">Try sample:</span>
+          <button type="button" class="quick-chip" data-phrase="I spent ₹180 on dinner">"I spent ₹180 on dinner"</button>
+          <button type="button" class="quick-chip" data-phrase="I received ₹5,000 from freelance work">"I received ₹5,000 from freelance work"</button>
+          <button type="button" class="quick-chip" data-phrase="I paid ₹1,200 for electricity yesterday">"I paid ₹1,200 for electricity yesterday"</button>
+          <button type="button" class="quick-chip" data-phrase="Spent ₹450 on groceries today">"Spent ₹450 on groceries"</button>
+        </div>
+
+        <!-- Confirmation / Review Card -->
+        <div class="review-card" id="reviewCard" aria-live="polite">
+          <div class="review-header">
+            <span class="review-title">Review &amp; Confirm Extracted Transaction</span>
+            <span class="pill-badge" id="reviewConfidence">Confidence: 95%</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary);" id="reviewNotice">
+            Verify the interpreted values below before saving to PostgreSQL:
+          </p>
+
+          <form id="reviewForm" class="review-grid">
+            <div class="form-group">
+              <label class="filter-label" for="reviewType">Type</label>
+              <select id="reviewType" class="filter-select" required>
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewAmount">Amount (₹)</label>
+              <input type="number" id="reviewAmount" class="filter-input" step="0.01" min="0.01" required>
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewCategory">Category</label>
+              <select id="reviewCategory" class="filter-select" required>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewDate">Date</label>
+              <input type="date" id="reviewDate" class="filter-input" required>
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label class="filter-label" for="reviewDescription">Description</label>
+              <input type="text" id="reviewDescription" class="filter-input" maxlength="255" required>
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewPaymentMethod">Payment Method</label>
+              <select id="reviewPaymentMethod" class="filter-select">
+                <option value="UPI">UPI</option>
+                <option value="Cash">Cash</option>
+                <option value="Credit Card">Credit Card</option>
+                <option value="Debit Card">Debit Card</option>
+                <option value="Net Banking">Net Banking</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="filter-label" for="reviewNotes">Notes (Optional)</label>
+              <input type="text" id="reviewNotes" class="filter-input" placeholder="Optional context">
+            </div>
+
+            <div class="review-actions" style="grid-column: 1 / -1;">
+              <button type="button" class="btn-secondary" id="btnDiscardReview">Discard</button>
+              <button type="submit" class="btn-primary" id="btnConfirmReview">Confirm &amp; Save Transaction</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Category Breakdown Card -->
+      <section class="category-breakdown-card" id="categoryBreakdownCard" aria-labelledby="cat-heading">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 id="cat-heading" class="section-label">Category-Wise Spending Breakdown</h3>
+          <span style="font-size: 0.75rem; color: var(--text-muted);" id="catPeriodLabel">Current Month</span>
+        </div>
+        <div id="categoryBreakdownList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <!-- Dynamically populated or empty state -->
+        </div>
+      </section>
+
+      <!-- Filter Bar -->
+      <section class="filter-bar" aria-label="Transaction Filters">
+        <div class="filter-group">
+          <label class="filter-label" for="filterStartDate">From Date</label>
+          <input type="date" id="filterStartDate" class="filter-input">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="filterEndDate">To Date</label>
+          <input type="date" id="filterEndDate" class="filter-input">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="filterType">Type</label>
+          <select id="filterType" class="filter-select">
+            <option value="">All Types</option>
+            <option value="expense">Expenses Only</option>
+            <option value="income">Income Only</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="filterCategory">Category</label>
+          <select id="filterCategory" class="filter-select">
+            <option value="">All Categories</option>
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+          <button type="button" class="btn-primary" id="btnApplyFilters" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;">Filter</button>
+          <button type="button" class="btn-secondary" id="btnResetFilters" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;">Reset</button>
+        </div>
+      </section>
+
+      <!-- Transactions History List -->
+      <section aria-labelledby="tx-heading">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <h3 id="tx-heading" class="section-label">Transaction History</h3>
+          <span style="font-size: 0.8rem; color: var(--text-muted);" id="txCountBadge">0 transactions</span>
+        </div>
+
+        <div id="transactionsContainer" class="transactions-container" aria-live="polite">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Pagination Controls -->
+        <div id="paginationControls" style="display: none; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-subtle);">
+          <button type="button" class="btn-secondary" id="btnPrevPage">Previous</button>
+          <span style="font-size: 0.8rem; color: var(--text-muted);" id="pageIndicator">Page 1 of 1</span>
+          <button type="button" class="btn-secondary" id="btnNextPage">Next</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Manual Entry / Edit Transaction Modal -->
+    <div class="modal-overlay" id="txModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modalTitle">Add New Transaction</h3>
+          <button type="button" class="modal-close" id="btnCloseTxModal" aria-label="Close modal">&times;</button>
+        </div>
+
+        <form id="modalTxForm" style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <input type="hidden" id="modalTxId">
+
+          <div style="display: flex; gap: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer;">
+              <input type="radio" name="modalTypeRadio" value="expense" checked id="radioExpense">
+              <span style="color: #f87171; font-weight: 600;">Expense</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; cursor: pointer;">
+              <input type="radio" name="modalTypeRadio" value="income" id="radioIncome">
+              <span style="color: #34d399; font-weight: 600;">Income</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalAmount">Amount (₹) *</label>
+            <input type="number" id="modalAmount" class="filter-input" step="0.01" min="0.01" placeholder="0.00" required>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalCategory">Category *</label>
+            <select id="modalCategory" class="filter-select" required>
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalDescription">Description *</label>
+            <input type="text" id="modalDescription" class="filter-input" maxlength="255" placeholder="e.g. Dinner, Grocery, Salary" required>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalDate">Date *</label>
+            <input type="date" id="modalDate" class="filter-input" required>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalPaymentMethod">Payment Method</label>
+            <select id="modalPaymentMethod" class="filter-select">
+              <option value="UPI">UPI</option>
+              <option value="Cash">Cash</option>
+              <option value="Credit Card">Credit Card</option>
+              <option value="Debit Card">Debit Card</option>
+              <option value="Net Banking">Net Banking</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="filter-label" for="modalNotes">Notes (Optional)</label>
+            <textarea id="modalNotes" class="filter-input" rows="2" maxlength="1000" placeholder="Additional notes or context"></textarea>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+            <button type="button" class="btn-secondary" id="btnCancelModal">Cancel</button>
+            <button type="submit" class="btn-primary" id="btnSaveModal">Save Transaction</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+    <!-- Footer -->
+    <footer role="contentinfo">
+      <p>Aanya Personal AI Assistant &bull; Finance Tracker Module &bull; Self-Hosted Modular Monolith</p>
+      <p style="margin-top: 0.25rem;">Deterministic database math &bull; Requires backend connectivity</p>
+    </footer>
+  </div>
+
+  <!-- Application Logic -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

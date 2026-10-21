@@ -1,0 +1,100 @@
+# ==============================================================================
+# Aanya Assistant - Docker Compose Deployment Specification
+# ==============================================================================
+# Services:
+#   1. db      - PostgreSQL 16 database with persistent storage volume
+#   2. backend - FastAPI application running as non-root user
+#   3. caddy   - Reverse proxy & HTTPS termination serving frontend and API
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Database (PostgreSQL)
+  # Notice: Port 5432 is strictly internal and NOT mapped to the public host.
+  # ----------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: aanya_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aanya_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aanya_password}
+      POSTGRES_DB: ${POSTGRES_DB:-aanya_db}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - aanya_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aanya_user} -d ${POSTGRES_DB:-aanya_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ----------------------------------------------------------------------------
+  # 2. Backend (FastAPI application)
+  # Runs as non-root user 'aanya', connects to 'db' service.
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: aanya_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aanya_user}:${POSTGRES_PASSWORD:-aanya_password}@db:5432/${POSTGRES_DB:-aanya_db}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - aanya_internal
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ----------------------------------------------------------------------------
+  # 3. Web & Proxy Server (Caddy)
+  # Serves static frontend PWA assets and proxies /api/* requests to backend.
+  # Automatic HTTPS for production domains; HTTP for local development.
+  # ----------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: aanya_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN_NAME: ${DOMAIN_NAME:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend:/srv/frontend:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - aanya_internal
+
+networks:
+  aanya_internal:
+    driver: bridge
+
+volumes:
+  db_data:
+    name: aanya_db_data
+  caddy_data:
+    name: aanya_caddy_data
+  caddy_config:
+    name: aanya_caddy_config
